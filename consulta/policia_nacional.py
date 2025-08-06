@@ -1,67 +1,113 @@
-from playwright.sync_api import sync_playwright
-import os
-import time
+# import os
+# import time
+# import requests
+# from playwright.sync_api import sync_playwright
 
-PAGE_TERMS = "https://antecedentes.policia.gov.co:7005/WebJudicial/"
-PAGE_ANTE = "https://antecedentes.policia.gov.co:7005/WebJudicial/antecedentes.xhtml"
+# CAPSOLVER_API_KEY = "CAP-99C7B12571DFBDC693C4EFACEE4D9F64BD7678F38556667407E34ABBEEA59830"
+# PAGE_URL = "https://antecedentes.policia.gov.co:7005/WebJudicial/antecedentes.xhtml"  # Portal real
 
-def consultar_policia_nacional(cedula, folder):
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False, slow_mo=500)  # slow_mo ayuda a no saturar la página
-        context = browser.new_context()
-        page = context.new_page()
+# # Clave del reCAPTCHA en la página (puede cambiar)
+# SITE_KEY = "6Le-wG0UAAAAAH2zv1fO9YB8uhy-5R2z3lFkxJ2C"  
 
-        # Ir a la página de términos
-        page.goto(PAGE_TERMS, timeout=60000)
+# def resolver_captcha_capsolver():
+#     resp = requests.post(
+#         "https://api.capsolver.com/createTask",
+#         json={
+#             "clientKey": CAPSOLVER_API_KEY,
+#             "task": {
+#                 "type": "ReCaptchaV2TaskProxyLess",
+#                 "websiteURL": PAGE_URL,
+#                 "websiteKey": SITE_KEY
+#             }
+#         }
+#     ).json()
 
-        # Esperar checkbox de aceptación de términos
-        page.wait_for_selector('#aceptaOption\\:0', timeout=15000)
-        print("[INFO] Simulando lectura de términos...")
-        page.wait_for_timeout(5000)  # 5 segundos de espera como si estuvieras leyendo
+#     if resp.get("errorId") != 0:
+#         raise Exception(f"Error creando tarea captcha: {resp}")
 
-        # Marcar aceptar términos
-        page.check('#aceptaOption\\:0')
-        page.wait_for_timeout(2000)  # espera breve tras marcar
+#     task_id = resp.get("taskId")
+#     print(f"[INFO] Tarea captcha creada, taskId: {task_id}")
 
-        # Click en el botón de continuar
-        print("[INFO] Dando clic en continuar...")
-        page.click('#continuarBtn')
+#     for i in range(24):  # máx ~2 min
+#         time.sleep(5)
+#         result = requests.post(
+#             "https://api.capsolver.com/getTaskResult",
+#             json={
+#                 "clientKey": CAPSOLVER_API_KEY,
+#                 "taskId": task_id
+#             }
+#         ).json()
 
-        # Esperar que cargue la página de antecedentes
-        page.wait_for_url(PAGE_ANTE, timeout=60000)
-        print("[INFO] Página de antecedentes cargada.")
+#         if result.get("status") == "ready":
+#             solution = result["solution"]["gRecaptchaResponse"]
+#             print("[INFO] Captcha resuelto correctamente.")
+#             return solution
+#         elif result.get("status") == "processing":
+#             print(f"[INFO] Captcha procesándose... ({i+1}/24)")
+#         else:
+#             raise Exception(f"Error consultando captcha: {result}")
 
-        # Simular lectura y llenado del formulario
-        page.wait_for_timeout(3000)  # 3 segundos de espera
+#     raise Exception("Timeout esperando la resolución del captcha")
 
-        # Completar formulario
-        page.select_option('#cedulaTipo', 'cc')
-        page.fill('#cedulaInput', cedula)
-        print(f"[INFO] Documento {cedula} ingresado.")
 
-        # Esperar manualmente para que puedas marcar captcha manual si deseas
-        print("[INFO] Espera de 60 segundos para que resuelvas captcha manual y marques enviar.")
-        page.wait_for_timeout(60000)
+# def consultar_policia_nacional(cedula, folder, tipo_doc="1"):
+#     """
+#     tipo_doc: '1' para Cédula de Ciudadanía, '2' para Cédula de Extranjería, etc.
+#     """
+#     with sync_playwright() as p:
+#         browser = p.chromium.launch(headless=False)
+#         context = browser.new_context(accept_downloads=True)
+#         page = context.new_page()
 
-        # Intentar ubicar y hacer clic en el botón de enviar (forzar espera)
-        try:
-            print("[INFO] Intentando dar clic en botón enviar...")
-            page.click('input[type="submit"]', timeout=20000)
-        except Exception as e:
-            print(f"[WARN] No se pudo hacer clic en el botón de enviar automáticamente: {e}")
-            print("[INFO] Puedes dar clic manualmente en el botón y la ejecución continuará.")
+#         print("[INFO] Ingresando a la página de la Policía...")
+#         page.goto(PAGE_URL, timeout=60000)
 
-        # Esperar a que cargue resultados
-        print("[INFO] Esperando que carguen resultados...")
-        page.wait_for_timeout(10000)
+#         # Seleccionar tipo de documento y llenar número
+#         page.select_option('select[name="frmConsulta:tipoDoc"]', tipo_doc)
+#         page.fill('input[name="frmConsulta:numDoc"]', cedula)
+#         print(f"[INFO] Documento {cedula} ingresado con tipo {tipo_doc}.")
 
-        # Capturar screenshot del resultado
-        screenshot_path = f"{folder}/antecedentes_{cedula}.png"
-        page.screenshot(path=screenshot_path)
-        print(f"[INFO] Screenshot guardado en {screenshot_path}")
+#         # Resolver captcha
+#         token = resolver_captcha_capsolver()
 
-        browser.close()
-        return screenshot_path
+#         # Inyectar token en el DOM
+#         page.evaluate(
+#             """token => {
+#                 let recaptchaResponse = document.getElementById('g-recaptcha-response');
+#                 if (!recaptchaResponse) {
+#                     recaptchaResponse = document.createElement('textarea');
+#                     recaptchaResponse.id = 'g-recaptcha-response';
+#                     recaptchaResponse.name = 'g-recaptcha-response';
+#                     recaptchaResponse.style.display = 'none';
+#                     document.body.appendChild(recaptchaResponse);
+#                 }
+#                 recaptchaResponse.value = token;
+#             }""",
+#             token
+#         )
 
-# Ejemplo de uso:
-# consultar_policia_nacional("123456789", "./output")
+#         page.wait_for_timeout(1500)
+
+#         # Simular clic en el botón consultar
+#         with page.expect_download(timeout=90000) as download_info:
+#             page.click('input[name="frmConsulta:btnConsultar"]')
+
+#         # Guardar PDF
+#         download = download_info.value
+#         os.makedirs(folder, exist_ok=True)
+#         pdf_path = os.path.join(folder, f'policia_{cedula}.pdf')
+#         download.save_as(pdf_path)
+
+#         print(f"[INFO] PDF descargado en: {pdf_path}")
+
+#         browser.close()
+#         return pdf_path
+
+
+# # Ejemplo de uso
+# if __name__ == "__main__":
+#     try:
+#         ruta = consultar_policia("123456789", "output_policia")
+#         print(f"[OK] Archivo descargado en: {ruta}")
+#     except Exception as e:
+#         print(f"[ERROR] {e}")

@@ -1,10 +1,21 @@
 import os
-import time
 from playwright.sync_api import sync_playwright
 
 PAGE_URL = "https://www.runt.gov.co/consultaCiudadana/#/consultaVehiculo"
 
+MAP_TIPOS_RUNT = {
+    "CC": "C",
+    "TI": "T",
+    "CE": "E",
+    "PP": "P",
+    "PTP": "PT",
+    "PPT": "PP"
+}
+
 def consultar_runt(placa, documento, tipo_documento, folder):
+    # Mapear tipo_doc del formulario al que entiende RUNT
+    tipo_runt = MAP_TIPOS_RUNT.get(tipo_documento, "C")
+
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
         context = browser.new_context()
@@ -18,14 +29,13 @@ def consultar_runt(placa, documento, tipo_documento, folder):
         page.fill('#noPlaca', placa)
 
         # Seleccionar tipo de documento
-        page.select_option('#input-tipo-documento-automotores', tipo_documento)  # "C" para cédula
-
-        # Ingresar número de documento
+        page.select_option('#input-tipo-documento-automotores', tipo_runt)
         page.fill('#noDocumento', documento)
 
         # Esperar captcha y capturarlo
         page.wait_for_selector('#imgCaptcha')
         captcha_element = page.query_selector('#imgCaptcha')
+        os.makedirs(folder, exist_ok=True)
         captcha_path = os.path.join(folder, "runt_captcha.png")
         captcha_element.screenshot(path=captcha_path)
         print(f"[INFO] Captura del captcha guardada en: {captcha_path}")
